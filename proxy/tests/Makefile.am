@@ -27,11 +27,19 @@ t_init_SOURCES = \
 t_init_LDADD = \
     $(GSSAPI_LIBS)
 
+t_delegate_SOURCES = \
+    t_utils.c \
+    t_delegate.c
+
+t_delegate_LDADD = \
+    $(GSSAPI_LIBS)
+
 check_PROGRAMS = \
     t_acquire \
     t_impersonate \
     t_accept \
-    t_init
+    t_init \
+    t_delegate
 
 noinst_PROGRAMS = $(check_PROGRAMS)
 

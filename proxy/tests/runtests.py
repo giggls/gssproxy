@@ -353,7 +353,8 @@ def setup_keys(tesdir, env):
 
     svc_name = "host/%s" % WRAP_HOSTNAME
     svc_keytab = os.path.join(testdir, SVC_KTNAME)
-    cmd = "addprinc -randkey -e %s %s" % (KEY_TYPE, svc_name)
+    cmd = "addprinc -ok_to_auth_as_delegate -randkey -e %s %s" % \
+          (KEY_TYPE, svc_name)
     with (open(testlog, 'a')) as logfile:
         kadmin_local(cmd, env, logfile)
     cmd = "ktadd -k %s -e %s %s" % (svc_keytab, KEY_TYPE, svc_name)
@@ -531,7 +532,11 @@ GSSPROXY_CONF_SOCKET_TEMPLATE = GSSPROXY_CONF_TEMPLATE + '''
   socket = ${SECOND_SOCKET}
 '''
 
-GSSPROXY_MULTI_TEMPLATE = '''
+GSSPROXY_MULTI_TEMPLATE = GSSPROXY_CONF_TEMPLATE + '''
+  krb5_principal = ${GSSPROXY_CLIENT_PRINCIPAL}
+'''
+
+GSSPROXY_S4U_TEMPLATE = '''
 [gssproxy]
   debug_level = 2
 
@@ -540,9 +545,20 @@ GSSPROXY_MULTI_TEMPLATE = '''
   cred_store = keytab:${GSSPROXY_KEYTAB}
   cred_store = ccache:FILE:${GSSPROXY_CLIENT_CCACHE}
   cred_store = client_keytab:${GSSPROXY_CLIENT_KEYTAB}
-  krb5_principal = ${GSSPROXY_CLIENT_PRINCIPAL}
-  trusted = yes
   euid = ${UIDNUMBER}
+  socket = ${SECOND_SOCKET}
+  trusted = yes
+  s4u2proxy = no
+
+[service/test2]
+  mechs = krb5
+  cred_store = keytab:${GSSPROXY_KEYTAB}
+  cred_store = ccache:FILE:${GSSPROXY_CLIENT_CCACHE}
+  cred_store = client_keytab:${GSSPROXY_CLIENT_KEYTAB}
+  euid = ${UIDNUMBER}
+  socket = ${THIRD_SOCKET}
+  trusted = no
+  s4u2proxy = yes
 '''
 
 def update_gssproxy_conf(testdir, env, template):
@@ -551,13 +567,15 @@ def update_gssproxy_conf(testdir, env, template):
     ckeytab = env['client_keytab']
     conf = os.path.join(gssproxy, 'gp.conf')
     socket2 = os.path.join(gssproxy, 'gp.sock2')
+    socket3 = os.path.join(gssproxy, 'gp.sock2')
 
     t = Template(template)
     subs = {'GSSPROXY_KEYTAB': env['KRB5_KTNAME'],
             'GSSPROXY_CLIENT_CCACHE': ccache,
             'GSSPROXY_CLIENT_KEYTAB': ckeytab,
             'UIDNUMBER': os.getuid(),
-            'SECOND_SOCKET': socket2}
+            'SECOND_SOCKET': socket2,
+            'THIRD_SOCKET': socket3}
     if 'client_name' in env:
         subs['GSSPROXY_CLIENT_PRINCIPAL'] = env['client_name']
     text = t.substitute(subs)
@@ -718,6 +736,36 @@ def run_impersonate_test(testdir, env, conf, expected_failure=False):
         print_success("SUCCESS" if p1.returncode == 0 else "FAILED",
                       "Impersonate test returned %s" % str(p1.returncode))
 
+def run_delegate_test(testdir, env, conf, expected_failure=False):
+    logfile = conf["logfile"]
+
+    testenv = {"KRB5CCNAME": os.path.join(testdir, "t" + conf["prefix"] +
+                                          "_delegate.ccache"),
+               "KRB5_KTNAME": conf["keytab"],
+               "KRB5_TRACE": os.path.join(testdir, "t" + conf["prefix"] +
+                                          "_delegate.trace"),
+               "GSS_USE_PROXY": "yes",
+               "GSSPROXY_BEHAVIOR": "REMOTE_FIRST"}
+    testenv.update(env)
+
+    cmd = ["./tests/t_delegate", USR_NAME, conf["svc_name"]]
+    print("[COMMAND]\n%s\n[ENVIRONMENT]\n%s\n" % (cmd, env), file=logfile)
+    logfile.flush()
+
+    p1 = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=logfile,
+                          env=testenv, preexec_fn=os.setsid)
+    try:
+        p1.wait(30)
+    except subprocess.TimeoutExpired:
+        # p1.returncode is set to None here
+        pass
+    if p1.returncode != 0 and not expected_failure:
+        print_failure("SUCCESS" if p1.returncode == 0 else "FAILED",
+                      "Delegate test returned %s" % str(p1.returncode))
+    else:
+        print_success("SUCCESS" if p1.returncode == 0 else "FAILED",
+                      "Delegate test returned %s" % str(p1.returncode))
+
 
 if __name__ == '__main__':
 
@@ -849,7 +897,7 @@ if __name__ == '__main__':
             time.sleep(1) #Let gssproxy reload everything
             run_basic_test(testdir, gssapienv, basicconf)
 
-            # Test 04 (part 2)
+            # Test 05 (part 2)
             print("Testing multiple keys Keytab with second principal",
                   file=sys.stderr)
             if os.path.exists(os.path.join(testdir, 'gssproxy', 'gpccache')):
@@ -863,6 +911,36 @@ if __name__ == '__main__':
             os.kill(gproc.pid, signal.SIGHUP)
             time.sleep(1) #Let gssproxy reload everything
             run_basic_test(testdir, gssapienv, basicconf)
+
+            # Test 06 (part 1)
+            # s4u2self okay
+            # s4u2proxy not okay
+            testnum += 1
+            gssapienv.update(keysenv)
+            update_gssproxy_conf(testdir, gssapienv, GSSPROXY_S4U_TEMPLATE)
+            print("Testing s4u2self without s4u2proxy")
+            basicconf['prefix'] = '%02d' % testnum
+            gssapienv['GSSAPI_SOCKET'] = os.path.join(testdir, "gssproxy", "gp.sock2")
+            basicconf['logfile'] = open(os.path.join(
+                testdir, '06_impersonate1.log'), 'a')
+            run_impersonate_test(testdir, gssapienv, basicconf)
+
+            basicconf['logfile'] = open(os.path.join(
+                testdir, '06_delegate1.log'), 'a')
+            run_delegate_test(testdir, gssapienv, basicconf, True)
+
+            # Test 06 (part 2)
+            # s4u2self not okay
+            # s4u2proxy okay
+            print("Testing s4u2proxy without s4u2self")
+            gssapienv['GSSAPI_SOCKET'] = os.path.join(testdir, "gssproxy", "gp.sock3")
+            basicconf['logfile'] = open(os.path.join(
+                testdir, '06_impersonate2.log'), 'a')
+            run_impersonate_test(testdir, gssapienv, basicconf, True)
+
+            basicconf['logfile'] = open(os.path.join(
+                testdir, '06_delegate2.log'), 'a')
+            run_delegate_test(testdir, gssapienv, basicconf)
     finally:
         for name in processes:
             print("Killing %s" % name)
