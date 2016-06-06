@@ -1,4 +1,4 @@
-/* Copyright (C) 2014 the GSS-PROXY contributors, see COPYING for license */
+/* Copyright (C) 2014, 2016 the GSS-PROXY contributors, see COPYING for license */
 
 #include "t_utils.h"
 
@@ -48,69 +48,56 @@ int main(int argc, const char *argv[])
         }
     }
 
-    ret_maj = gss_init_sec_context(&ret_min,
-                                   cred_handle,
-                                   &context_handle,
-                                   name,
-                                   GSS_C_NO_OID,
-                                   GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
-                                   0,
-                                   GSS_C_NO_CHANNEL_BINDINGS,
-                                   &in_token,
-                                   NULL,
-                                   &out_token,
-                                   NULL,
-                                   NULL);
-    if (ret_maj != GSS_S_CONTINUE_NEEDED) {
-        DEBUG("gss_init_sec_context() failed\n");
-        t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
-        ret = -1;
-        goto done;
-    }
+    do {
+        ret_maj = gss_init_sec_context(&ret_min,
+                                       cred_handle,
+                                       &context_handle,
+                                       name,
+                                       GSS_C_NO_OID,
+                                       GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
+                                       0,
+                                       GSS_C_NO_CHANNEL_BINDINGS,
+                                       &in_token,
+                                       NULL,
+                                       &out_token,
+                                       NULL,
+                                       NULL);
+        if (GSS_ERROR(ret_maj)) {
+            DEBUG("gss_init_sec_context() failed\n");
+            t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
+            ret = -1;
+            goto done;
+        }
 
-    /* We get stuff from stdin and spit it out on stderr */
-    if (!out_token.length) {
-        DEBUG("No output token ?");
-        ret = -1;
-        goto done;
-    }
+        /* We get stuff from stdin and spit it out on stderr */
+        if (!out_token.length) {
+            if (ret_maj == GSS_S_COMPLETE) {
+                break;
+            }
 
-    ret = t_send_buffer(STDOUT_FD, out_token.value, out_token.length);
-    if (ret) {
-        DEBUG("Failed to send data to server!\n");
-        ret = -1;
-        goto done;
-    }
+            DEBUG("No output token ?");
+            ret = -1;
+            goto done;
+        }
 
-    ret = t_recv_buffer(STDIN_FD, buffer, &buflen);
-    if (ret != 0) {
-        DEBUG("Failed to read token from STDIN\n");
-        ret = -1;
-        goto done;
-    }
+        ret = t_send_buffer(STDOUT_FD, out_token.value, out_token.length);
+        if (ret) {
+            DEBUG("Failed to send data to server!\n");
+            ret = -1;
+            goto done;
+        }
+        gss_release_buffer(&ret_min, &out_token);
 
-    in_token.value = buffer;
-    in_token.length = buflen;
+        ret = t_recv_buffer(STDIN_FD, buffer, &buflen);
+        if (ret != 0) {
+            DEBUG("Failed to read token from STDIN\n");
+            ret = -1;
+            goto done;
+        }
 
-    ret_maj = gss_init_sec_context(&ret_min,
-                                   cred_handle,
-                                   &context_handle,
-                                   name,
-                                   GSS_C_NO_OID,
-                                   GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
-                                   0,
-                                   GSS_C_NO_CHANNEL_BINDINGS,
-                                   &in_token,
-                                   NULL,
-                                   &out_token,
-                                   NULL,
-                                   NULL);
-    if (ret_maj) {
-        DEBUG("Error initializing context\n");
-        t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
-        ret = -1;
-        goto done;
-    }
+        in_token.value = buffer;
+        in_token.length = buflen;
+    } while (ret_maj == GSS_S_CONTINUE_NEEDED);
 
     ret = 0;
 

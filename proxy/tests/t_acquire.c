@@ -1,4 +1,4 @@
-/* Copyright (C) 2014 the GSS-PROXY contributors, see COPYING for license */
+/* Copyright (C) 2014, 2016 the GSS-PROXY contributors, see COPYING for license */
 
 #include "t_utils.h"
 #include <unistd.h>
@@ -55,79 +55,73 @@ int main(int argc, const char *argv[])
 
     gss_release_cred(&ret_min, &cred_handle);
 
-    ret_maj = gss_init_sec_context(&ret_min,
-                                   GSS_C_NO_CREDENTIAL,
-                                   &init_ctx,
-                                   target_name,
-                                   GSS_C_NO_OID,
-                                   GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
-                                   0,
-                                   GSS_C_NO_CHANNEL_BINDINGS,
-                                   &in_token,
-                                   NULL,
-                                   &out_token,
-                                   NULL,
-                                   NULL);
-    if (ret_maj != GSS_S_CONTINUE_NEEDED) {
-        DEBUG("gss_init_sec_context() failed\n");
-        t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
-        ret = -1;
-        goto done;
-    }
+    while (1) {
+        ret_maj = gss_init_sec_context(&ret_min,
+                                       GSS_C_NO_CREDENTIAL,
+                                       &init_ctx,
+                                       target_name,
+                                       GSS_C_NO_OID,
+                                       GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
+                                       0,
+                                       GSS_C_NO_CHANNEL_BINDINGS,
+                                       &in_token,
+                                       NULL,
+                                       &out_token,
+                                       NULL,
+                                       NULL);
+        if (GSS_ERROR(ret_maj)) {
+            DEBUG("gss_init_sec_context() failed\n");
+            t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
+            ret = -1;
+            goto done;
+        }
 
-    /* We get stuff from stdin and spit it out on stderr */
-    if (!out_token.length) {
-        DEBUG("No output token ?");
-        ret = -1;
-        goto done;
-    }
+        gss_release_buffer(&ret_min, &in_token);
+        in_token.value = NULL;
 
+        if (!out_token.length) {
+            if (ret_maj == GSS_S_COMPLETE) {
+                /* negotiation complete */
+                break;
+            }
 
-    /* in/out token inverted here intentionally */
-    ret_maj = gss_accept_sec_context(&ret_min,
-                                     &accept_ctx,
-                                     GSS_C_NO_CREDENTIAL,
-                                     &out_token,
-                                     GSS_C_NO_CHANNEL_BINDINGS,
-                                     NULL,
-                                     NULL,
-                                     &in_token,
-                                     NULL,
-                                     NULL,
-                                     NULL);
-    if (ret_maj) {
-        DEBUG("Error accepting context\n");
-        t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
-        ret = -1;
-        goto done;
-    }
+            DEBUG("No output token from init_sec_context?");
+            ret = -1;
+            goto done;
+        }
 
-    if (!in_token.length) {
-        DEBUG("No output token ?");
-        ret = -1;
-        goto done;
-    }
+        /* in/out token inverted here intentionally */
+        ret_maj = gss_accept_sec_context(&ret_min,
+                                         &accept_ctx,
+                                         GSS_C_NO_CREDENTIAL,
+                                         &out_token,
+                                         GSS_C_NO_CHANNEL_BINDINGS,
+                                         NULL,
+                                         NULL,
+                                         &in_token,
+                                         NULL,
+                                         NULL,
+                                         NULL);
+        if (GSS_ERROR(ret_maj)) {
+            DEBUG("Error accepting context\n");
+            t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
+            ret = -1;
+            goto done;
+        }
 
-    gss_release_buffer(&ret_min, &out_token);
+        gss_release_buffer(&ret_min, &out_token);
+        out_token.value = NULL;
 
-    ret_maj = gss_init_sec_context(&ret_min,
-                                   GSS_C_NO_CREDENTIAL,
-                                   &init_ctx,
-                                   target_name,
-                                   GSS_C_NO_OID,
-                                   GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG,
-                                   0,
-                                   GSS_C_NO_CHANNEL_BINDINGS,
-                                   &in_token,
-                                   NULL,
-                                   &out_token,
-                                   NULL,
-                                   NULL);
-    if (ret_maj) {
-        DEBUG("Error initializing context\n");
-        t_log_failure(GSS_C_NO_OID, ret_maj, ret_min);
-        ret = -1;
-        goto done;
+        if (!in_token.length) {
+            if (ret_maj == GSS_S_COMPLETE) {
+                /* negotiation complete */
+                break;
+            }
+
+            DEBUG("No output token from accept_sec_context?");
+            ret = -1;
+            goto done;
+        }
     }
 
     ret = 0;
