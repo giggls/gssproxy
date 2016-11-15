@@ -1,0 +1,15 @@
+To autostart gssproxy instead of /usr/sbin/rpc.svcgssd do the following:
+
+* Replace /etc/init.d/nfs-kernel-server with /usr/share/doc/nfs-kernel-server.init.gssproxy
+* update /etc/default/nfs-kernel-server as follows:
+  NEED_SVCGSSD=no
+  NEED_GSSPROXY=yes
+* Add the following entry to /etc/gssproxy/gssproxy.conf
+
+  [service/nfs-server]
+    mechs = krb5
+    socket = /run/gssproxy.sock
+    cred_store = keytab:/etc/krb5.keytab
+    trusted = yes
+    kernel_nfsd = yes
+    euid = 0

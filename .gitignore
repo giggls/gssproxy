@@ -57,3 +57,12 @@ mkinstalldirs
 proxy/examples/*.conf
 proxy/examples/mech
 testdir/
+proxy/man/gssproxy-mech.8.xml
+proxy/mkinstalldirs~
+*.deb
+gssproxy*.changes
+gssproxy*.dsc
+gssproxy*.tar.*
+proxy/debian/gssproxy.*
+proxy/debian/files
+

@@ -1,0 +1,21 @@
+Source: gssproxy
+Section: net
+Maintainer: Sven Geggus <sven-debian@geggus.net>
+Priority: optional
+Build-Depends: debhelper (>= 9), libpopt-dev, libverto-dev, libini-config-dev (>=0.6.0), libkrb5-dev
+Standards-Version: 3.9.8
+Homepage: <homepage>
+
+Package: gssproxy
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: An abstraction layer between a GSS client and the credentials being used
+  gssproxy (https://fedorahosted.org/gss-proxy/) is an abstraction layer
+  (typically an application) between a GSS client and the credentials being
+  used.
+  .
+  The most important use case would be the replacement of rpc.svcgssd which
+  is now basically orphaned and does not work well in some cases and might
+  even be a security problem.
+

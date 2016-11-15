@@ -1,0 +1,45 @@
+#!/bin/sh
+# if you need to repack for whatever reason you can
+# use this script via uscan or directly
+#
+# FIXME: currently the code is not conform to Debian Policy
+#        http://www.debian.org/doc/debian-policy/ch-source.html
+#        "get-orig-source (optional)"
+#        This target may be invoked in any directory, ...
+# --> currently it is assumed the script is called in the
+#     source directory featuring the debian/ dir
+
+COMPRESS=xz
+
+set -e
+NAME=`dpkg-parsechangelog | awk '/^Source/ { print $2 }'`
+
+if ! echo $@ | grep -q upstream-version ; then
+    VERSION=`dpkg-parsechangelog | awk '/^Version:/ { print $2 }' | sed 's/\([0-9\.]\+\)-[0-9]\+$/\1/'`
+    uscan --force-download
+else
+    VERSION=`echo $@ | sed "s?^.*--upstream-version \([0-9.]\+\) .*${NAME}.*?\1?"`
+    if echo "$VERSION" | grep -q "upstream-version" ; then
+        echo "Unable to parse version number"
+        exit
+    fi
+fi
+
+TARDIR=${NAME}-${VERSION}
+mkdir -p ../tarballs
+cd ../tarballs
+# need to clean up the tarballs dir first because upstream tarball might
+# contain a directory with unpredictable name
+rm -rf *
+tar -xaf ../${TARDIR}.tar.gz
+
+UPSTREAMTARDIR=`find . -mindepth 1 -maxdepth 1 -type d`
+if [ "${UPSTREAMTARDIR}" != "${TARDIR}" ] ; then
+    mv "${UPSTREAMTARDIR}" "${TARDIR}"
+fi
+
+# Remove useless binaries
+# ... do something which needs to be done ...
+
+GZIP="--best --no-name" tar --owner=root --group=root --mode=a+rX -caf "$NAME"_"$VERSION".orig.tar.${COMPRESS} "${TARDIR}"
+rm -rf ${TARDIR}

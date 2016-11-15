@@ -1,0 +1,11 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: #PACKAGE#
+Source: <path_to_download>
+
+Files: *
+Copyright: © 20xx-20yy, <upstream>
+License: <license>
+
+Files: debian/*
+Copyright: © 2013, #USERNAME# <#EMAIL#>
+License: <license>

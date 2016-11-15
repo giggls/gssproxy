@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+
+# DH_VERBOSE := 1
+
+# some helpful variables - uncomment them if needed
+# shamelessly stolen from http://jmtd.net/log/awk/
+#DEBVERS        := $(shell dpkg-parsechangelog | awk '/^Version:/ {print $$2}')
+#VERSION        := $(shell echo '$(DEBVERS)' | sed -e 's/^[0-9]*://' -e 's/-.*//')
+#DEBFLAVOR      := $(shell dpkg-parsechangelog | awk '/^Distribution:/ {print $$2}')
+#DEBPKGNAME     := $(shell dpkg-parsechangelog | awk '/^Source:/ {print $$2}')
+#DEBIAN_BRANCH  := $(shell awk 'BEGIN{FS="[= ]+"} /debian-branch/ {print $$2}' debian/gbp.conf)
+#GIT_TAG        := $(subst ~,_,$(VERSION))
+
+# alternatively to manually set those variables you can
+#  include /usr/share/cdbs/1/rules/buildvars.mk
+# and use what is set there.  Any hint whether dh might set variables in
+# a similar manner are welcome.
+
+override_dh_auto_configure:
+	autoreconf -f -i
+	dh_auto_configure -- --with-init-dir=/etc/init.d
+
+override_dh_auto_install:
+	dh_auto_install
+	cp debian/nfs-kernel-server debian/gssproxy/usr/share/doc/nfs-kernel-server.init.gssproxy
+	echo [gssproxy] > debian/gssproxy/etc/gssproxy/gssproxy.conf
+
+%:
+	dh $@ --parallel

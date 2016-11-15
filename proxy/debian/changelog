@@ -1,0 +1,7 @@
+gssproxy (0.5.1-1) unstable; urgency=medium
+
+  * Custom debian package
+    (git hash: faceac530f415c96d8698c1321711aa30fc5b3c1)
+
+ -- Sven Geggus <sven-debian@geggus.net>  Thu, 27 Oct 2016 16:37:48 +0200
+
